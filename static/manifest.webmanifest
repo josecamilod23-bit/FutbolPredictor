@@ -1,0 +1,23 @@
+{
+  "id": "/",
+  "name": "FutbolPredictor",
+  "short_name": "FutbolPredictor",
+  "description": "Analisis estadistico de partidos de futbol",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#101722",
+  "theme_color": "#101722",
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
