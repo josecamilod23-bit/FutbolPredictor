@@ -7,8 +7,8 @@ ARCHIVOS = [
     Path("datos/partidos_e0_2425.csv"),
     Path("datos/partidos_e0_2526.csv"),
 ]
-PESO_FORMA = 0.50
-ULTIMOS = 5
+PESO_FORMA = 0.30
+ULTIMOS = 10
 MIN_HISTORIAL = 40
 
 
