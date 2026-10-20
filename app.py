@@ -1,4 +1,7 @@
-from flask import Flask, request, render_template_string
+from flask import Flask, request, render_template_string, jsonify
+import os, json, time
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
 import evaluar_predictor as ev
 
 app = Flask(__name__)
@@ -47,12 +50,26 @@ small,.muted{color:#aab6c7}
 .tag{display:inline-block;padding:4px 8px;border-radius:6px;
 background:#26394b;margin-right:8px}
 footer{text-align:center;color:#aab6c7;font-size:12px;margin:24px 0}
+
+.live-match{padding:12px 0;border-bottom:1px solid #344357}
+.live-score{font-size:21px;font-weight:bold;color:#58e0a5;text-align:center}
+.live-teams{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center}
+.live-teams span:last-child{text-align:right}
+.live-status{font-size:12px;color:#ff7783;margin-bottom:7px}
+
 </style>
 </head>
 <body>
 <main>
 <h1>⚽ FutbolPredictor</h1>
 <div class="sub">Análisis estadístico de partidos</div>
+
+
+<div class="card" id="card-en-vivo">
+<h2>🔴 Partidos en vivo</h2>
+<p class="muted" id="estado-vivo">Consultando marcadores reales...</p>
+<div id="lista-en-vivo"></div>
+</div>
 
 <div class="card">
 <h2>Elegir partido</h2>
@@ -124,6 +141,50 @@ Estimaciones estadísticas; no garantizan resultados futuros.
 </main>
 
 <script>
+
+async function cargarPartidosEnVivo() {
+  const estado = document.getElementById("estado-vivo");
+  const lista = document.getElementById("lista-en-vivo");
+  try {
+    const respuesta = await fetch("/api/en-vivo", {cache: "no-store"});
+    const datos = await respuesta.json();
+    if (!respuesta.ok || !datos.ok) {
+      throw new Error(datos.error || "No se pudo consultar la API");
+    }
+    lista.replaceChildren();
+    if (!datos.partidos.length) {
+      estado.textContent = "No hay partidos en juego en este momento.";
+      return;
+    }
+    estado.textContent = "Marcadores en directo";
+    for (const p of datos.partidos) {
+      const tarjeta = document.createElement("div");
+      tarjeta.className = "live-match";
+      const liga = document.createElement("small");
+      liga.textContent = p.liga;
+      const estadoPartido = document.createElement("div");
+      estadoPartido.className = "live-status";
+      estadoPartido.textContent = p.estado;
+      const equipos = document.createElement("div");
+      equipos.className = "live-teams";
+      const local = document.createElement("span");
+      local.textContent = p.local;
+      const marcador = document.createElement("strong");
+      marcador.className = "live-score";
+      marcador.textContent = p.goles_local + " - " + p.goles_visitante;
+      const visitante = document.createElement("span");
+      visitante.textContent = p.visitante;
+      equipos.append(local, marcador, visitante);
+      tarjeta.append(liga, estadoPartido, equipos);
+      lista.append(tarjeta);
+    }
+  } catch (e) {
+    estado.textContent = "No se pudieron cargar los marcadores. Intenta más tarde.";
+  }
+}
+cargarPartidosEnVivo();
+setInterval(cargarPartidosEnVivo, 600000);
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").catch(console.error);
@@ -210,6 +271,62 @@ def inicio():
         puntos=puntos,
         total_partidos=len(PARTIDOS),
     )
+
+
+
+CACHE_EN_VIVO = {"momento": 0, "datos": None}
+
+@app.route("/api/en-vivo")
+def partidos_en_vivo():
+    clave = os.environ.get("API_FOOTBALL_KEY", "").strip()
+    if not clave:
+        return jsonify({"ok": False, "error": "Falta configurar la clave de API."}), 503
+
+    ahora = time.time()
+    if CACHE_EN_VIVO["datos"] is not None and ahora - CACHE_EN_VIVO["momento"] < 1200:
+        return jsonify(CACHE_EN_VIVO["datos"])
+
+    try:
+        req = Request(
+            "https://v3.football.api-sports.io/fixtures?live=all",
+            headers={"x-apisports-key": clave, "Accept": "application/json"}
+        )
+        with urlopen(req, timeout=15) as respuesta:
+            contenido = json.loads(respuesta.read().decode("utf-8"))
+
+        if contenido.get("errors"):
+            return jsonify({
+                "ok": False,
+                "error": "La API rechazó la consulta. Revisa el plan y la clave en Render."
+            }), 502
+
+        partidos = []
+        for item in contenido.get("response", []):
+            fixture = item.get("fixture", {})
+            equipos = item.get("teams", {})
+            goles = item.get("goals", {})
+            liga = item.get("league", {})
+            estado = fixture.get("status", {})
+            partidos.append({
+                "liga": liga.get("name") or "Competición",
+                "local": (equipos.get("home") or {}).get("name") or "Local",
+                "visitante": (equipos.get("away") or {}).get("name") or "Visitante",
+                "goles_local": goles.get("home") if goles.get("home") is not None else 0,
+                "goles_visitante": goles.get("away") if goles.get("away") is not None else 0,
+                "estado": str(estado.get("short") or "EN JUEGO") +
+                    ((" · " + str(estado["elapsed"]) + "'") if estado.get("elapsed") is not None else "")
+            })
+
+        resultado = {"ok": True, "partidos": partidos}
+        CACHE_EN_VIVO["momento"] = ahora
+        CACHE_EN_VIVO["datos"] = resultado
+        return jsonify(resultado)
+
+    except (HTTPError, URLError, TimeoutError, ValueError):
+        return jsonify({
+            "ok": False,
+            "error": "No fue posible conectar con el proveedor de marcadores."
+        }), 502
 
 
 @app.route("/manifest.webmanifest")
