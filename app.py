@@ -295,9 +295,16 @@ def partidos_en_vivo():
             contenido = json.loads(respuesta.read().decode("utf-8"))
 
         if contenido.get("errors"):
+            errores = contenido.get("errors")
+            if isinstance(errores, dict):
+                diagnostico = ", ".join(str(k) for k in errores.keys())
+            else:
+                diagnostico = "error_devuelto_por_el_proveedor"
+
             return jsonify({
                 "ok": False,
-                "error": "La API rechazó la consulta. Revisa el plan y la clave en Render."
+                "error": "API-Football rechazó la consulta.",
+                "diagnostico": diagnostico or "error_no_especificado"
             }), 502
 
         partidos = []
