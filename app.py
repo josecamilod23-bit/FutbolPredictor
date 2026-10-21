@@ -296,17 +296,14 @@ def partidos_en_vivo():
 
         if contenido.get("errors"):
             errores = contenido.get("errors")
-            permitidos = {
-                "token", "requests", "plan", "live",
-                "fixture", "date", "league", "season",
-                "team", "status", "timezone"
-            }
             detalles = []
             if isinstance(errores, dict):
                 for campo, valor in errores.items():
-                    if campo in permitidos and valor:
+                    if valor:
                         texto = str(valor)[:120]
                         detalles.append(f"{campo}: {texto}")
+            elif errores:
+                detalles.append(str(errores)[:120])
 
             return jsonify({
                 "ok": False,
