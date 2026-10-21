@@ -296,15 +296,23 @@ def partidos_en_vivo():
 
         if contenido.get("errors"):
             errores = contenido.get("errors")
+            permitidos = {
+                "token", "requests", "plan", "live",
+                "fixture", "date", "league", "season",
+                "team", "status", "timezone"
+            }
+            detalles = []
             if isinstance(errores, dict):
-                diagnostico = ", ".join(str(k) for k in errores.keys())
-            else:
-                diagnostico = "error_devuelto_por_el_proveedor"
+                for campo, valor in errores.items():
+                    if campo in permitidos and valor:
+                        texto = str(valor)[:120]
+                        detalles.append(f"{campo}: {texto}")
 
             return jsonify({
                 "ok": False,
                 "error": "API-Football rechazó la consulta.",
-                "diagnostico": diagnostico or "error_no_especificado"
+                "diagnostico": "; ".join(detalles)
+                    or "El proveedor devolvió un error sin detalles compatibles."
             }), 502
 
         partidos = []
